@@ -1,6 +1,7 @@
 ;;; core-editor.el -*- lexical-binding: t; -*-
 
-(defvar doom-detect-indentation-excluded-modes '(fundamental-mode so-long-mode)
+(defvar doom-detect-indentation-excluded-modes
+  '(fundamental-mode pascal-mode so-long-mode)
   "A list of major modes in which indentation should be automatically
 detected.")
 
@@ -435,8 +436,23 @@ files, so we replace calls to `pp' with the much faster `prin1'."
   (setq dtrt-indent-max-lines 2000)
 
   ;; always keep tab-width up-to-date
-  (push '(t tab-width) dtrt-indent-hook-generic-mapping-list))
+  (push '(t tab-width) dtrt-indent-hook-generic-mapping-list)
 
+  (defvar dtrt-indent-run-after-smie)
+  (defadvice! doom--fix-broken-smie-modes-a (orig-fn arg)
+    "Some smie modes throw errors when trying to guess their indentation, like
+`nim-mode'. This prevents them from leaving Emacs in a broken state."
+    :around #'dtrt-indent-mode
+    (let ((dtrt-indent-run-after-smie dtrt-indent-run-after-smie))
+      (letf! ((defun symbol-config--guess (beg end)
+                (funcall symbol-config--guess beg (min end 10000)))
+              (defun smie-config-guess ()
+                (condition-case e (funcall smie-config-guess)
+                  (error (setq dtrt-indent-run-after-smie t)
+                         (message "[WARNING] Indent detection: %s"
+                                  (error-message-string e))
+                         (message ""))))) ; warn silently
+        (funcall orig-fn arg)))))
 
 (use-package! helpful
   ;; a better *help* buffer
